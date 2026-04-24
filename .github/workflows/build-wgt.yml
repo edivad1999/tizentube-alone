@@ -1,9 +1,8 @@
-name: Build unsigned WGT
+name: Build and Release WGT
 
 on:
   push:
     branches: [main, master]
-    tags: ['v*']
   pull_request:
     branches: [main, master]
   workflow_dispatch:
@@ -11,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout this repo
@@ -36,54 +37,21 @@ jobs:
           cp service/service.js tizentube-src/service/service.js
           cd tizentube-src/service && npm ci && npx rollup -c rollup.config.js
 
-      - name: Gather build artifacts
-        run: |
-          mkdir -p dist
-          cp tizentube-src/dist/userScript.js dist/
-          cp tizentube-src/dist/service.js    dist/
-
-      - name: Cache Tizen Studio
-        id: tizen-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/tizen-studio
-          key: tizen-studio-5.6-ubuntu
-
-      - name: Install Tizen Studio CLI
-        if: steps.tizen-cache.outputs.cache-hit != 'true'
-        run: |
-          curl -fSL -o tizen-installer.bin \
-            "https://download.tizen.org/sdk/Installer/tizen-studio_5.6/web-cli_Tizen_Studio_5.6_ubuntu-64.bin"
-          chmod +x tizen-installer.bin
-          ./tizen-installer.bin -- --accept-license "$HOME/tizen-studio"
-          rm tizen-installer.bin
-
-      - name: Add Tizen CLI to PATH
-        run: echo "$HOME/tizen-studio/tools/ide/bin" >> "$GITHUB_PATH"
-
-      - name: Prepare tizen-app directory
+      - name: Prepare tizen-app with built artifacts
         run: |
           mkdir -p tizen-app/service
-          cp dist/userScript.js tizen-app/
-          cp dist/service.js    tizen-app/service/
-          # Use TizenBrew icon as placeholder
-          curl -fSL -o tizen-app/icon.png \
-            "https://raw.githubusercontent.com/reisxd/TizenBrew/main/tizenbrew-app/TizenBrew/icon.png" \
-            || echo "Icon download failed — add tizen-app/icon.png manually"
-
-      - name: tizen build-web
-        run: |
-          tizen build-web \
-            -e ".*" \
-            -e "node_modules/*" \
-            -e "package*.json" \
-            -- tizen-app
+          cp tizentube-src/dist/userScript.js tizen-app/
+          cp tizentube-src/dist/service.js    tizen-app/service/
 
       - name: Package unsigned WGT
         run: |
           mkdir -p release
-          cd tizen-app/.buildResult
-          zip -r "$GITHUB_WORKSPACE/release/TizenTubeStandalone.wgt" .
+          cd tizen-app
+          zip -r ../release/TizenTubeStandalone.wgt . \
+            --exclude ".*" \
+            --exclude "node_modules/*" \
+            --exclude "package*.json" \
+            --exclude ".buildResult/*"
 
       - name: Upload WGT artifact
         uses: actions/upload-artifact@v4
@@ -92,14 +60,27 @@ jobs:
           path: release/TizenTubeStandalone.wgt
           retention-days: 30
 
+      - name: Bump version tag
+        if: github.event_name != 'pull_request'
+        id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          tag_prefix: v
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          files: release/TizenTubeStandalone.wgt
+          tag_name: ${{ steps.tag.outputs.new_tag }}
+          name: ${{ steps.tag.outputs.new_tag }}
           body: |
-            ## TizenTube Standalone — unsigned WGT
+            ## TizenTube Standalone ${{ steps.tag.outputs.new_tag }}
 
-            Download `TizenTubeStandalone.wgt` and follow the steps in [INSTALL.md](INSTALL.md) to sign and sideload it on your Samsung TV.
+            Download `TizenTubeStandalone.wgt` and follow [INSTALL.md](INSTALL.md) to sign and sideload.
 
-            **This file is unsigned.** You must re-sign it with your own Samsung developer certificate before installation.
+            **Unsigned** — re-sign locally: `tizen package -t wgt -s <your-profile> -- TizenTubeStandalone.wgt`
+
+            ${{ steps.tag.outputs.changelog }}
+          files: release/TizenTubeStandalone.wgt
