@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns:tizen="http://tizen.org/ns/widgets" xmlns="http://www.w3.org/ns/widgets" id="https://github.com/reisxd/TizenTube" version="1.13.2" viewmodes="maximized">
+    <access origin="*" subdomains="true"></access>
+    <tizen:app-control>
+        <tizen:src name="index.html" reload="disable"/>
+        <tizen:operation name="http://samsung.com/appcontrol/operation/eden_resume"/>
+    </tizen:app-control>
+    <tizen:application id="TZTubeAlne.TizenTubeStandalone" package="TZTubeAlne" required_version="5.5"/>
+    <author href="https://github.com/reisxd/TizenTube">Reis Can</author>
+    <content src="index.html"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <feature name="http://tizen.org/feature/web.service"/>
+    <icon src="icon.png"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/prelaunch.support" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/floating.navigation" value="false"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/use.game.mode" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/html5.4k.support" value="true"/>
+    <tizen:metadata key="http://samsung.com/tv/metadata/no_use_process_pool" value="true"/>
+    <name>TizenTube</name>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/tv.inputdevice"/>
+    <tizen:privilege name="http://tizen.org/privilege/unlimitedstorage"/>
+    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:service id="TZTubeAlne.TizenTubeService">
+        <tizen:content src="service/service.js"/>
+        <tizen:name>TizenTubeService</tizen:name>
+        <tizen:description>TizenTube proxy and DIAL service</tizen:description>
+    </tizen:service>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="enable" encryption="disable" install-location="auto" hwkey-event="enable"/>
+</widget>

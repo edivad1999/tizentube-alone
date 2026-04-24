@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TizenTube</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0f0f0f;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'YouTube Sans', Roboto, sans-serif;
+        }
+        .logo { color: #ff0000; font-size: 48px; font-weight: 700; margin-bottom: 16px; }
+        .status { color: #aaa; font-size: 20px; }
+        .dot { animation: blink 1s infinite; }
+        @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <div class="logo">TizenTube</div>
+    <div class="status">Loading<span class="dot">...</span></div>
+    <script>
+        var PROXY_URL = 'http://127.0.0.1:8085';
+        var YT_URL = PROXY_URL + '/tv?additionalDataUrl=http%3A%2F%2Flocalhost%3A8085%2Fdial%2Fapps%2FYouTube';
+        var MAX_ATTEMPTS = 40;
+        var attempts = 0;
+
+        // Register media keys while tizen object is accessible in this widget context
+        var MEDIA_KEYS = [
+            'MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop',
+            'MediaFastForward', 'MediaRewind', 'MediaTrackNext', 'MediaTrackPrevious'
+        ];
+        if (typeof tizen !== 'undefined' && tizen.tvinputdevice) {
+            MEDIA_KEYS.forEach(function(key) {
+                try { tizen.tvinputdevice.registerKey(key); } catch (e) {}
+            });
+        }
+
+        function navigate() {
+            window.location.replace(YT_URL);
+        }
+
+        function poll() {
+            fetch(PROXY_URL + '/health')
+                .then(function(r) {
+                    if (r.ok) {
+                        navigate();
+                    } else {
+                        retry();
+                    }
+                })
+                .catch(retry);
+        }
+
+        function retry() {
+            attempts++;
+            if (attempts < MAX_ATTEMPTS) {
+                setTimeout(poll, 500);
+            } else {
+                // Service taking too long — try anyway
+                navigate();
+            }
+        }
+
+        poll();
+    </script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# Cloned reference repos
+.references/
+
+# Build artifacts
+dist/
+release/
+tizen-app/userScript.js
+tizen-app/service/
+tizen-app/.buildResult/
+
+# Node
+node_modules/
+
+# IDE
+.idea/
+*.iml
+
+# OMC / Claude project state
+.omc/
+.claude/
