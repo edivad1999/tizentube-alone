@@ -90,6 +90,23 @@ docker run -d --restart unless-stopped --name tizentube \
   ghcr.io/edivad1999/tizentube-alone
 ```
 
+Or with Docker Compose — create a `compose.yml`:
+
+```yaml
+services:
+  tizentube:
+    image: ghcr.io/edivad1999/tizentube-alone:latest
+    restart: unless-stopped
+    environment:
+      TV_IP: 192.168.1.50
+```
+
+```bash
+docker compose up -d
+# update
+docker compose pull && docker compose up -d
+```
+
 Update to latest userscript:
 
 ```bash

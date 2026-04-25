@@ -1,0 +1,6 @@
+services:
+  tizentube:
+    image: ghcr.io/edivad1999/tizentube-alone:latest
+    restart: unless-stopped
+    environment:
+      TV_IP: 192.168.1.50
