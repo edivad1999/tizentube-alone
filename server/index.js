@@ -139,9 +139,8 @@ setInterval(function() {
 
         ws.on('error', err => console.error('CDP WebSocket error:', err.message));
         ws.on('close', () => {
-            console.log('CDP connection closed. Waiting for next app launch...');
-            // Re-launch in debug mode so the next time the user opens the app it gets injected
-            setTimeout(launchAndInject, 3000);
+            console.log('CDP connection closed. Waiting for user to open TizenTube...');
+            setTimeout(pollForApp, 2000);
         });
     } catch (err) {
         if (attempt < CDP_RETRIES) {
@@ -151,6 +150,40 @@ setInterval(function() {
         }
         console.error('attachDebugger failed after ' + CDP_RETRIES + ' attempts:', err.message);
     }
+}
+
+// Poll SDB until the app process appears, then relaunch in debug mode to enable injection.
+// This fires after the user explicitly opens TizenTube from the TV home screen.
+function pollForApp() {
+    const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
+    adb._intentionalClose = false;
+
+    adb._stream.on('connect', () => {
+        const shell = adb.createStream('shell:0 ps');
+        let output = '';
+        shell.on('data', d => { output += d.toString(); });
+        shell.on('end', () => {
+            adb._intentionalClose = true;
+            adb._stream.end();
+            if (output.includes('TZTubeAlne')) {
+                console.log('TizenTube detected running — switching to debug mode...');
+                launchAndInject();
+            } else {
+                setTimeout(pollForApp, 2000);
+            }
+        });
+        // Fallback: if shell never sends 'end', move on after 3s
+        setTimeout(() => {
+            if (!adb._intentionalClose) {
+                adb._intentionalClose = true;
+                adb._stream.end();
+                setTimeout(pollForApp, 2000);
+            }
+        }, 3000);
+    });
+
+    adb._stream.on('error', () => setTimeout(pollForApp, 3000));
+    adb._stream.on('close', () => {});
 }
 
 function launchAndInject() {
@@ -177,8 +210,8 @@ function launchAndInject() {
 
     adb._stream.on('close', () => {
         if (adb._intentionalClose) return;
-        console.log('SDB disconnected unexpectedly. Reconnecting in 3s...');
-        setTimeout(launchAndInject, 3000);
+        console.log('SDB disconnected unexpectedly. Polling for app in 3s...');
+        setTimeout(pollForApp, 3000);
     });
 }
 
