@@ -60,6 +60,23 @@ async function attachDebugger(port, adbConn, attempt = 1) {
         console.log('CDP: connecting to ' + wsUrl);
         const ws = new WebSocket(wsUrl);
         let msgId = 20;
+        let reloaded = false;
+
+        // Append an interval that re-patches _yttv sandbox contexts as YouTube creates them.
+        // The pre-document injection runs before _yttv exists, so the patch loop at the end of
+        // adblock.js is a no-op on first run. The interval catches every key added later.
+        const yttvPatcher = `
+setInterval(function() {
+  if (typeof JSON._patched === 'undefined') return;
+  if (!window._yttv) return;
+  for (var k in window._yttv) {
+    if (window._yttv[k] && window._yttv[k].JSON && window._yttv[k].JSON.parse !== JSON.parse) {
+      window._yttv[k].JSON.parse = JSON.parse;
+    }
+  }
+}, 500);
+`;
+        const fullScript = userScript + '\nJSON._patched = true;\n' + yttvPatcher;
 
         ws.on('open', () => {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
@@ -75,7 +92,7 @@ async function attachDebugger(port, adbConn, attempt = 1) {
             ws.send(JSON.stringify({
                 id: 13,
                 method: 'Page.addScriptToEvaluateOnNewDocument',
-                params: { source: userScript },
+                params: { source: fullScript },
             }));
             console.log('Page.addScriptToEvaluateOnNewDocument registered.');
         });
@@ -83,12 +100,17 @@ async function attachDebugger(port, adbConn, attempt = 1) {
         ws.on('message', (data) => {
             const msg = JSON.parse(data.toString());
 
-            // Log success/failure of the pre-document injection registration
+            // Once registration confirmed, reload so current page starts fresh with hooks in place
             if (msg.id === 13) {
                 if (msg.error) {
                     console.error('Page.addScriptToEvaluateOnNewDocument failed:', msg.error.message);
                 } else {
                     console.log('Pre-document injection registered, identifier:', msg.result?.identifier);
+                    if (!reloaded) {
+                        reloaded = true;
+                        console.log('Reloading page to apply hooks from page start...');
+                        ws.send(JSON.stringify({ id: 15, method: 'Page.reload' }));
+                    }
                 }
             }
 
