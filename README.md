@@ -66,10 +66,38 @@ The server must be running whenever you use TizenTube. It connects to the TV via
 
 ### Option A — Docker (recommended)
 
+**Prerequisites:** [Install Docker](https://docs.docker.com/get-docker/) for your OS.
+
+Pull the latest image:
+
+```bash
+docker pull ghcr.io/edivad1999/tizentube-alone:latest
+```
+
+Run (exits when you close the terminal):
+
 ```bash
 docker run --rm ghcr.io/edivad1999/tizentube-alone <TV_IP>
 # or via env var
 docker run --rm -e TV_IP=192.168.1.50 ghcr.io/edivad1999/tizentube-alone
+```
+
+Run as a persistent background service (auto-restarts on reboot):
+
+```bash
+docker run -d --restart unless-stopped --name tizentube \
+  -e TV_IP=192.168.1.50 \
+  ghcr.io/edivad1999/tizentube-alone
+```
+
+Update to latest userscript:
+
+```bash
+docker pull ghcr.io/edivad1999/tizentube-alone:latest
+docker rm -f tizentube
+docker run -d --restart unless-stopped --name tizentube \
+  -e TV_IP=192.168.1.50 \
+  ghcr.io/edivad1999/tizentube-alone
 ```
 
 The image installs `@foxreis/tizentube@latest` at build time and is rebuilt on every push to main, so it always ships the current userscript.
