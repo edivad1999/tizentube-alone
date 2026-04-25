@@ -77,9 +77,9 @@ docker pull ghcr.io/edivad1999/tizentube-alone:latest
 Run (exits when you close the terminal):
 
 ```bash
-docker run --rm ghcr.io/edivad1999/tizentube-alone <TV_IP>
-# or via env var
 docker run --rm -e TV_IP=192.168.1.50 ghcr.io/edivad1999/tizentube-alone
+# pin a specific TizenTube version
+docker run --rm -e TV_IP=192.168.1.50 -e TIZENTUBE_VERSION=1.2.3 ghcr.io/edivad1999/tizentube-alone
 ```
 
 Run as a persistent background service (auto-restarts on reboot):
@@ -99,6 +99,7 @@ services:
     restart: unless-stopped
     environment:
       TV_IP: 192.168.1.50
+      # TIZENTUBE_VERSION: "1.2.3"  # pin a version; omit to always pull latest
 ```
 
 ```bash
