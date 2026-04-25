@@ -153,40 +153,50 @@ setInterval(function() {
 }
 
 // Poll SDB every second until the app process appears, then switch to debug mode.
+// shell:0 streams stay open — use data debounce instead of 'end' event.
 function pollForApp() {
     console.log('[poll] Checking if TizenTube is running...');
     const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
-    adb._intentionalClose = false;
+    let decided = false;
+
+    function decide(output) {
+        if (decided) return;
+        decided = true;
+        adb._stream.end();
+        if (output.includes('TZTubeAlne')) {
+            console.log('[poll] TizenTube detected — switching to debug mode...');
+            launchAndInject();
+        } else {
+            console.log('[poll] Not running. Retry in 1s...');
+            setTimeout(pollForApp, 1000);
+        }
+    }
 
     adb._stream.on('connect', () => {
         console.log('[poll] SDB connected, running ps...');
         const shell = adb.createStream('shell:0 ps');
         let output = '';
-        shell.on('data', d => { output += d.toString(); });
-        shell.on('end', () => {
-            adb._intentionalClose = true;
-            adb._stream.end();
+        let settleTimer = null;
+
+        shell.on('data', d => {
+            output += d.toString();
+            // Decide as soon as we see the package name
             if (output.includes('TZTubeAlne')) {
-                console.log('[poll] TizenTube detected running — launching in debug mode...');
-                launchAndInject();
-            } else {
-                console.log('[poll] TizenTube not running. Retrying in 1s...');
-                setTimeout(pollForApp, 1000);
+                clearTimeout(settleTimer);
+                decide(output);
+                return;
             }
+            // Otherwise debounce: wait 400ms after last chunk (ps output is finite)
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(() => decide(output), 400);
         });
-        // Fallback: if shell stream never closes, bail after 3s
-        setTimeout(() => {
-            if (!adb._intentionalClose) {
-                console.log('[poll] ps timed out. Retrying in 1s...');
-                adb._intentionalClose = true;
-                adb._stream.end();
-                setTimeout(pollForApp, 1000);
-            }
-        }, 3000);
+
+        // Hard timeout in case no data arrives at all
+        setTimeout(() => decide(output), 4000);
     });
 
     adb._stream.on('error', err => {
-        console.log('[poll] SDB error: ' + err.message + '. Retrying in 2s...');
+        console.log('[poll] SDB error: ' + err.message + '. Retry in 2s...');
         setTimeout(pollForApp, 2000);
     });
     adb._stream.on('close', () => {});
