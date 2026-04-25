@@ -10,6 +10,8 @@ import { dirname, join } from 'node:path';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 const APP_ID = 'TZTubeAlne.TizenTubeStandalone';
+const CDP_RETRIES = 15;
+const CDP_RETRY_DELAY = 750;
 
 const tvIp = process.argv[2] || process.env.TV_IP;
 if (!tvIp) {
@@ -38,7 +40,11 @@ try {
 
 console.log('userScript size: ' + userScript.length + ' bytes');
 
-async function attachDebugger(port, adbConn) {
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function attachDebugger(port, adbConn, attempt = 1) {
     try {
         const res = await nodeFetch('http://' + tvIp + ':' + port + '/json');
         const targets = await res.json();
@@ -55,7 +61,7 @@ async function attachDebugger(port, adbConn) {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
             ws.send(JSON.stringify({ id: 11, method: 'Runtime.enable' }));
             ws.send(JSON.stringify({ id: 12, method: 'Page.enable' }));
-            // Inject before any document parsing — catches JSON.parse hooks early
+            // Primary injection: runs before any document parsing in every new document
             ws.send(JSON.stringify({
                 id: 13,
                 method: 'Page.addScriptToEvaluateOnNewDocument',
@@ -66,18 +72,27 @@ async function attachDebugger(port, adbConn) {
 
         ws.on('message', (data) => {
             const msg = JSON.parse(data.toString());
-            // Fallback: also inject per-context for any YouTube origin contexts
-            if (
-                msg.method === 'Runtime.executionContextCreated' &&
-                msg.params?.context?.origin?.includes('youtube.com')
-            ) {
-                console.log('YouTube context detected — injecting userScript (fallback)...');
+
+            // Log success/failure of the pre-document injection registration
+            if (msg.id === 13) {
+                if (msg.error) {
+                    console.error('Page.addScriptToEvaluateOnNewDocument failed:', msg.error.message);
+                } else {
+                    console.log('Pre-document injection registered, identifier:', msg.result?.identifier);
+                }
+            }
+
+            // Fallback: inject per-context to catch any contexts that slip through
+            if (msg.method === 'Runtime.executionContextCreated') {
+                const origin = msg.params?.context?.origin || '';
+                const ctxId  = msg.params?.context?.id;
+                console.log('Execution context created, origin: ' + origin);
                 ws.send(JSON.stringify({
                     id: msgId++,
                     method: 'Runtime.evaluate',
                     params: {
                         expression: userScript,
-                        contextId: msg.params.context.id,
+                        contextId: ctxId,
                         objectGroup: 'console',
                         includeCommandLineAPI: true,
                         doNotPauseOnExceptionsAndMuteConsole: false,
@@ -85,14 +100,19 @@ async function attachDebugger(port, adbConn) {
                         generatePreview: false,
                     }
                 }));
-                console.log('userScript injected (fallback).');
+                console.log('userScript injected into context ' + ctxId + ' (' + origin + ')');
             }
         });
 
         ws.on('error', err => console.error('CDP WebSocket error:', err.message));
         ws.on('close', () => console.log('CDP connection closed — re-inject on next launch.'));
     } catch (err) {
-        console.error('attachDebugger failed:', err.message);
+        if (attempt < CDP_RETRIES) {
+            console.log('attachDebugger attempt ' + attempt + ' failed: ' + err.message + '. Retrying in ' + CDP_RETRY_DELAY + 'ms...');
+            await sleep(CDP_RETRY_DELAY);
+            return attachDebugger(port, adbConn, attempt + 1);
+        }
+        console.error('attachDebugger failed after ' + CDP_RETRIES + ' attempts:', err.message);
     }
 }
 
