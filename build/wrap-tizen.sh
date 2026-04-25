@@ -40,10 +40,10 @@ mkdir -p "$DIST_DIR"
 cp "$TIZENTUBE_SRC/dist/userScript.js" "$DIST_DIR/userScript.js"
 cp "$TIZENTUBE_SRC/dist/service.js"    "$DIST_DIR/service.js"
 
-# Populate tizen-app with built artifacts
+# Populate tizen-app with built artifacts (userScript goes to dist only — injected by PC server)
 mkdir -p "$TIZEN_APP_DIR/service"
-cp "$DIST_DIR/userScript.js" "$TIZEN_APP_DIR/userScript.js"
-cp "$DIST_DIR/service.js"    "$TIZEN_APP_DIR/service/service.js"
+cp "$DIST_DIR/service.js" "$TIZEN_APP_DIR/service/service.js"
+rm -f "$TIZEN_APP_DIR/userScript.js"  # remove any leftover from old proxy builds
 
 # Copy TizenBrew icon if no local icon exists
 if [ ! -f "$TIZEN_APP_DIR/icon.png" ]; then
@@ -64,6 +64,7 @@ if command -v tizen &>/dev/null; then
         -- "$TIZEN_APP_DIR"
 
     mkdir -p "$RELEASE_DIR"
+    rm -f "$RELEASE_DIR/TizenTubeStandalone.wgt"
     echo "Packaging .wgt (unsigned)..."
     cd "$TIZEN_APP_DIR/.buildResult"
     zip -r "$RELEASE_DIR/TizenTubeStandalone.wgt" .
@@ -73,6 +74,7 @@ else
     # Fallback: zip tizen-app directly (skips tizen build-web validation)
     mkdir -p "$RELEASE_DIR"
     echo "tizen CLI not found — zipping tizen-app directly (unsigned, unvalidated)..."
+    rm -f "$RELEASE_DIR/TizenTubeStandalone.wgt"
     cd "$TIZEN_APP_DIR"
     zip -r "$RELEASE_DIR/TizenTubeStandalone.wgt" . \
         --exclude ".*" \

@@ -40,8 +40,7 @@ jobs:
       - name: Prepare tizen-app with built artifacts
         run: |
           mkdir -p tizen-app/service
-          cp tizentube-src/dist/userScript.js tizen-app/
-          cp tizentube-src/dist/service.js    tizen-app/service/
+          cp tizentube-src/dist/service.js tizen-app/service/
 
       - name: Package unsigned WGT
         run: |
@@ -52,6 +51,15 @@ jobs:
             --exclude "node_modules/*" \
             --exclude "package*.json" \
             --exclude ".buildResult/*"
+
+      - name: Bundle PC server with userScript
+        run: |
+          mkdir -p release/server
+          cp server/index.js      release/server/
+          cp server/package.json  release/server/
+          cp tizentube-src/dist/userScript.js release/server/../dist/userScript.js 2>/dev/null || \
+            (mkdir -p release/dist && cp tizentube-src/dist/userScript.js release/dist/userScript.js)
+          cd release && zip -r TizenTubeServer.zip server/ dist/
 
       - name: Upload WGT artifact
         uses: actions/upload-artifact@v4
@@ -83,4 +91,6 @@ jobs:
             **Unsigned** — re-sign locally: `tizen package -t wgt -s <your-profile> -- TizenTubeStandalone.wgt`
 
             ${{ steps.tag.outputs.changelog }}
-          files: release/TizenTubeStandalone.wgt
+          files: |
+            release/TizenTubeStandalone.wgt
+            release/TizenTubeServer.zip
