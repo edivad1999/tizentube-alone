@@ -103,6 +103,11 @@
 
     addrInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') btn.click();
+        if (e.key === 'ArrowDown') { e.preventDefault(); btn.focus(); }
+    });
+
+    btn.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowUp') { e.preventDefault(); addrInput.focus(); }
     });
 
     // Long-press red key clears saved address and shows setup screen again
