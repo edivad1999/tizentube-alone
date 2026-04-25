@@ -55,6 +55,7 @@ async function attachDebugger(port, adbConn, attempt = 1) {
         if (!targets[0]?.webSocketDebuggerUrl) throw new Error('No debugger URL in /json response');
 
         const wsUrl = targets[0].webSocketDebuggerUrl;
+        adbConn._intentionalClose = true;
         adbConn._stream.end();
 
         console.log('CDP: connecting to ' + wsUrl);
@@ -137,7 +138,11 @@ setInterval(function() {
         });
 
         ws.on('error', err => console.error('CDP WebSocket error:', err.message));
-        ws.on('close', () => console.log('CDP connection closed — re-inject on next launch.'));
+        ws.on('close', () => {
+            console.log('CDP connection closed. Waiting for next app launch...');
+            // Re-launch in debug mode so the next time the user opens the app it gets injected
+            setTimeout(launchAndInject, 3000);
+        });
     } catch (err) {
         if (attempt < CDP_RETRIES) {
             console.log('attachDebugger attempt ' + attempt + ' failed: ' + err.message + '. Retrying in ' + CDP_RETRY_DELAY + 'ms...');
@@ -171,7 +176,9 @@ function launchAndInject() {
     });
 
     adb._stream.on('close', () => {
-        console.log('SDB disconnected.');
+        if (adb._intentionalClose) return;
+        console.log('SDB disconnected unexpectedly. Reconnecting in 3s...');
+        setTimeout(launchAndInject, 3000);
     });
 }
 
