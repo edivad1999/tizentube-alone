@@ -78,7 +78,7 @@
     }
 
     function triggerInject(pcHost, pcPort) {
-        var addr = pcHost + ':' + pcPort;
+        var addr = pcHost + (pcPort ? ':' + pcPort : '');
         statusEl.style.display = 'block';
         setupEl.style.display  = 'none';
         statusEl.textContent   = 'Connecting to server...';
@@ -92,7 +92,8 @@
     }
 
     var pcHost = localStorage.getItem('pcHost');
-    var pcPort = localStorage.getItem('pcPort') || '3000';
+    var pcPort = localStorage.getItem('pcPort');
+    if (pcPort === null) pcPort = '3000';
     if (!pcHost) {
         portInput.value = pcPort;
         showSetup();
@@ -102,7 +103,7 @@
 
     btn.addEventListener('click', function() {
         var ip   = ipInput.value.trim();
-        var port = portInput.value.trim() || '3000';
+        var port = portInput.value.trim();
         if (!ip) { errMsg.textContent = 'Enter an IP address.'; return; }
         errMsg.textContent = '';
         localStorage.setItem('pcHost', ip);

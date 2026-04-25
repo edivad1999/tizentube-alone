@@ -9,6 +9,7 @@ COPY server/index.js ./
 
 ENV TV_IP=""
 ENV TIZENTUBE_VERSION=""
+ENV PORT=3000
 
 EXPOSE 3000
 

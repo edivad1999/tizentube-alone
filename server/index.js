@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const APP_ID = 'TZTubeAlne.TizenTubeStandalone';
 const CDP_RETRIES = 15;
 const CDP_RETRY_DELAY = 750;
-const TRIGGER_PORT = 3000;
+const TRIGGER_PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Spoof Cobalt/ATV UA so YouTube serves the same ad config as a real Cobalt device.
 // Tizen WebKit's default UA causes YouTube to serve a different (less restrictive) ad policy.

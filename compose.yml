@@ -6,4 +6,5 @@ services:
       - "3000:3000"
     environment:
       TV_IP: 192.168.1.50
+      # PORT: 3000              # injection trigger port (default 3000); update ports mapping below too
       # TIZENTUBE_VERSION: "1.2.3"  # pin a version; omit to always pull latest
