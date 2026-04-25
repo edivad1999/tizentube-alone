@@ -53,6 +53,13 @@ function sleep(ms) {
 
 // Inflight guard — prevents duplicate launches while a debug attach is in progress
 let injecting = false;
+let injectTimeout = null;
+
+function resetInjecting() {
+    injecting = false;
+    clearTimeout(injectTimeout);
+    injectTimeout = null;
+}
 
 async function attachDebugger(port, adbConn, attempt = 1) {
     try {
@@ -144,7 +151,7 @@ setInterval(function() {
 
         ws.on('error', err => console.error('CDP WebSocket error:', err.message));
         ws.on('close', () => {
-            injecting = false;
+            resetInjecting();
             console.log('CDP connection closed. Ready for next launch trigger.');
         });
     } catch (err) {
@@ -153,7 +160,7 @@ setInterval(function() {
             await sleep(CDP_RETRY_DELAY);
             return attachDebugger(port, adbConn, attempt + 1);
         }
-        injecting = false;
+        resetInjecting();
         console.error('attachDebugger failed after ' + CDP_RETRIES + ' attempts:', err.message);
     }
 }
@@ -171,7 +178,7 @@ function debugLaunch(adb, attempt) {
             console.log('No debug response — retrying...');
             debugLaunch(adb, attempt + 1);
         } else {
-            injecting = false;
+            resetInjecting();
             console.error('debug launch failed after 3 attempts');
             adb._stream.end();
         }
@@ -195,6 +202,13 @@ function launchAndInject() {
     console.log('Connecting to TV SDB at ' + tvIp + ':26101...');
     const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
 
+    // Safety valve: if TV goes off and SDB hangs without firing events, reset after 45s
+    injectTimeout = setTimeout(() => {
+        console.log('[launch] inject timed out — resetting to idle.');
+        resetInjecting();
+        try { adb._stream.end(); } catch (_) {}
+    }, 45000);
+
     adb._stream.on('connect', () => {
         console.log('SDB connected. Killing any running instance of ' + APP_ID + '...');
         const kill = adb.createStream('shell:0 was_kill ' + APP_ID);
@@ -216,13 +230,13 @@ function launchAndInject() {
     });
 
     adb._stream.on('error', err => {
-        injecting = false;
+        resetInjecting();
         console.error('[launch] SDB error: ' + err.message);
     });
 
     adb._stream.on('close', () => {
         if (adb._intentionalClose) return;
-        injecting = false;
+        resetInjecting();
         console.log('SDB disconnected unexpectedly.');
     });
 }
