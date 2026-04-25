@@ -77,19 +77,10 @@ docker pull ghcr.io/edivad1999/tizentube-alone:latest
 Run (exits when you close the terminal):
 
 ```bash
-docker run --rm -p 3000:3000 \
-  -e TV_IP=192.168.1.50 \
-  -e HOST_IP=192.168.1.100 \
-  ghcr.io/edivad1999/tizentube-alone
+docker run --rm -p 3000:3000 -e TV_IP=192.168.1.50 ghcr.io/edivad1999/tizentube-alone
 # pin a specific TizenTube version
-docker run --rm -p 3000:3000 \
-  -e TV_IP=192.168.1.50 \
-  -e HOST_IP=192.168.1.100 \
-  -e TIZENTUBE_VERSION=1.2.3 \
-  ghcr.io/edivad1999/tizentube-alone
+docker run --rm -p 3000:3000 -e TV_IP=192.168.1.50 -e TIZENTUBE_VERSION=1.2.3 ghcr.io/edivad1999/tizentube-alone
 ```
-
-`TV_IP` is your Samsung TV's IP address. `HOST_IP` is your **PC's LAN IP** — the TV app calls this address to trigger injection.
 
 Run as a persistent background service (auto-restarts on reboot):
 
@@ -97,7 +88,6 @@ Run as a persistent background service (auto-restarts on reboot):
 docker run -d --restart unless-stopped --name tizentube \
   -p 3000:3000 \
   -e TV_IP=192.168.1.50 \
-  -e HOST_IP=192.168.1.100 \
   ghcr.io/edivad1999/tizentube-alone
 ```
 
@@ -112,7 +102,6 @@ services:
       - "3000:3000"
     environment:
       TV_IP: 192.168.1.50
-      HOST_IP: 192.168.1.100   # your PC's LAN IP
       # TIZENTUBE_VERSION: "1.2.3"  # pin a version; omit to always pull latest
 ```
 
@@ -140,16 +129,14 @@ The image installs `@foxreis/tizentube@latest` at build time and is rebuilt on e
 # unzip TizenTubeServer.zip first (from the same release)
 cd TizenTubeServer
 npm install
-node server/index.js <TV_IP> <HOST_IP>
-# or
-TV_IP=192.168.1.50 HOST_IP=192.168.1.100 node server/index.js
+node server/index.js <TV_IP>
 ```
 
 ---
 
 ## Usage
 
-1. Start the injection server with your TV's IP and **your PC's LAN IP** (`HOST_IP`)
+1. Start the injection server with your TV's IP (`TV_IP`)
 2. Launch **TizenTube** from the TV's app list
 3. **First run only**: a setup screen appears — use the TV remote to enter your PC's IP and press OK
 4. The server launches TizenTube in debug mode and injects the userscript
@@ -175,9 +162,9 @@ Download the new release, re-sign (Step 3), reinstall (Step 5). The Docker image
 | `sdb install` fails | Re-sign the wgt (Step 3) |
 | Server: `SDB error: connection refused` | TV off or Developer Mode Host PC IP mismatch |
 | Server: `No debugger URL` | App not in debug mode — wait and retry |
-| TV shows "Could not reach server" | `HOST_IP` wrong or container not running; check `docker ps` |
-| Setup screen appears every launch | `HOST_IP` unreachable so `fetch` fails; fix IP and hold red key to re-enter |
-| Ads still showing | Ensure server is running and `HOST_IP` is correct before launching |
+| TV shows "Could not reach server" | Wrong PC IP entered on TV or container not running; check `docker ps`, hold red key to re-enter IP |
+| Setup screen appears every launch | Server unreachable; verify container is running and PC IP is correct |
+| Ads still showing | Ensure server is running before launching the TV app |
 | YouTube shows "not available" | Network/DNS issue, unrelated to TizenTube |
 
 ---

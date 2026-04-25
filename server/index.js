@@ -19,13 +19,12 @@ const TRIGGER_PORT = 3000;
 // Tizen WebKit's default UA causes YouTube to serve a different (less restrictive) ad policy.
 const COBALT_UA = 'Mozilla/5.0 (Linux armeabi-v7a; Android 14) Cobalt/25.lts.30.1034958-gold (unlike Gecko) v8/8.8.278.17-jit gles Starboard/15, Google_ATV_sabrina_2020/UTTC.250917.004 (google, Chromecast) com.google.android.youtube.tv/5.30.301';
 
-const tvIp   = process.argv[2] || process.env.TV_IP;
-const hostIp = process.argv[3] || process.env.HOST_IP || '';
+const tvIp = process.argv[2] || process.env.TV_IP;
 
 if (!tvIp) {
-    console.error('Usage: node server/index.js <TV_IP> [HOST_IP]');
-    console.error('       TV_IP=192.168.1.50 HOST_IP=192.168.1.100 node server/index.js');
-    console.error('       docker run --rm -e TV_IP=... -e HOST_IP=... ghcr.io/edivad1999/tizentube-alone');
+    console.error('Usage: node server/index.js <TV_IP>');
+    console.error('       TV_IP=192.168.1.50 node server/index.js');
+    console.error('       docker run --rm -e TV_IP=... ghcr.io/edivad1999/tizentube-alone');
     process.exit(1);
 }
 
@@ -82,10 +81,8 @@ setInterval(function() {
   }
 }, 500);
 `;
-        // Sentinel globals injected before userScript so index.html knows it's in debug mode
-        // and has the server address for any future calls.
-        const sentinels = 'window.__TIZENTUBE_DEBUG__=true;\nwindow.__PC_HOST__=' + JSON.stringify(hostIp) + ';\n';
-        const fullScript = sentinels + userScript + '\nJSON._patched = true;\n' + yttvPatcher;
+        // Sentinel injected before userScript so index.html knows it's in debug mode.
+        const fullScript = 'window.__TIZENTUBE_DEBUG__=true;\n' + userScript + '\nJSON._patched = true;\n' + yttvPatcher;
 
         ws.on('open', () => {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
@@ -221,5 +218,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(TRIGGER_PORT, '0.0.0.0', () => {
     console.log('Server started. Listening for /inject triggers on port ' + TRIGGER_PORT + '.');
-    console.log('TV IP: ' + tvIp + (hostIp ? ' | Host IP: ' + hostIp : ' | HOST_IP not set'));
+    console.log('TV IP: ' + tvIp);
 });

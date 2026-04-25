@@ -8,9 +8,8 @@ RUN npm install
 COPY server/index.js ./
 
 ENV TV_IP=""
-ENV HOST_IP=""
 ENV TIZENTUBE_VERSION=""
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "npm install @foxreis/tizentube@${TIZENTUBE_VERSION:-latest} && node index.js ${TV_IP} ${HOST_IP}"]
+CMD ["sh", "-c", "npm install @foxreis/tizentube@${TIZENTUBE_VERSION:-latest} && node index.js ${TV_IP}"]

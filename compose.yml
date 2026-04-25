@@ -6,5 +6,4 @@ services:
       - "3000:3000"
     environment:
       TV_IP: 192.168.1.50
-      HOST_IP: 192.168.1.100   # your PC's LAN IP — TV app calls this to trigger injection
       # TIZENTUBE_VERSION: "1.2.3"  # pin a version; omit to always pull latest
