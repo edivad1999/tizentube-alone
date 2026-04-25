@@ -179,7 +179,9 @@ function pollForApp() {
         let settleTimer = null;
 
         shell.on('data', d => {
-            output += d.toString();
+            const chunk = d.toString();
+            console.log('[poll] ps chunk (' + chunk.length + ' bytes): ' + chunk.substring(0, 200));
+            output += chunk;
             // Decide as soon as we see the package name
             if (output.includes('TZTubeAlne')) {
                 clearTimeout(settleTimer);
@@ -188,14 +190,16 @@ function pollForApp() {
             }
             // Otherwise debounce: wait 400ms after last chunk (ps output is finite)
             clearTimeout(settleTimer);
-            settleTimer = setTimeout(() => {
-                console.log('[poll] ps output:\n' + output);
-                decide(output);
-            }, 400);
+            settleTimer = setTimeout(() => decide(output), 400);
         });
 
-        // Hard timeout in case no data arrives at all
-        setTimeout(() => decide(output), 4000);
+        // Hard timeout if no data at all
+        setTimeout(() => {
+            if (!decided) {
+                console.log('[poll] Hard timeout — ps output so far:\n' + output);
+                decide(output);
+            }
+        }, 4000);
     });
 
     adb._stream.on('error', err => {
