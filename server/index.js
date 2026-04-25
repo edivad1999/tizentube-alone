@@ -13,6 +13,10 @@ const APP_ID = 'TZTubeAlne.TizenTubeStandalone';
 const CDP_RETRIES = 15;
 const CDP_RETRY_DELAY = 750;
 
+// Spoof Cobalt/ATV UA so YouTube serves the same ad config as a real Cobalt device.
+// Tizen WebKit's default UA causes YouTube to serve a different (less restrictive) ad policy.
+const COBALT_UA = 'Mozilla/5.0 (Linux armeabi-v7a; Android 14) Cobalt/25.lts.30.1034958-gold (unlike Gecko) v8/8.8.278.17-jit gles Starboard/15, Google_ATV_sabrina_2020/UTTC.250917.004 (google, Chromecast) com.google.android.youtube.tv/5.30.301';
+
 const tvIp = process.argv[2] || process.env.TV_IP;
 if (!tvIp) {
     console.error('Usage: node server/index.js <TV_IP>');
@@ -61,6 +65,12 @@ async function attachDebugger(port, adbConn, attempt = 1) {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
             ws.send(JSON.stringify({ id: 11, method: 'Runtime.enable' }));
             ws.send(JSON.stringify({ id: 12, method: 'Page.enable' }));
+            // Spoof Cobalt/ATV user agent before page loads
+            ws.send(JSON.stringify({
+                id: 14,
+                method: 'Network.setUserAgentOverride',
+                params: { userAgent: COBALT_UA },
+            }));
             // Primary injection: runs before any document parsing in every new document
             ws.send(JSON.stringify({
                 id: 13,
