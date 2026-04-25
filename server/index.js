@@ -188,7 +188,10 @@ function pollForApp() {
             }
             // Otherwise debounce: wait 400ms after last chunk (ps output is finite)
             clearTimeout(settleTimer);
-            settleTimer = setTimeout(() => decide(output), 400);
+            settleTimer = setTimeout(() => {
+                console.log('[poll] ps output:\n' + output);
+                decide(output);
+            }, 400);
         });
 
         // Hard timeout in case no data arrives at all
