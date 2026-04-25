@@ -3,40 +3,51 @@ import adbhost from 'adbhost';
 import nodeFetch from 'node-fetch';
 import WebSocket from 'ws';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
 const APP_ID = 'TZTubeAlne.TizenTubeStandalone';
 
-const tvIp = process.argv[2];
+const tvIp = process.argv[2] || process.env.TV_IP;
 if (!tvIp) {
     console.error('Usage: node server/index.js <TV_IP>');
-    console.error('Example: node server/index.js 192.168.1.50');
+    console.error('       TV_IP=192.168.1.50 node server/index.js');
+    console.error('       docker run --rm ghcr.io/edivad1999/tizentube-alone <TV_IP>');
     process.exit(1);
 }
 
+// Load userScript: prefer installed @foxreis/tizentube npm package, fall back to local dist/
 let userScript;
 try {
-    userScript = readFileSync(join(__dirname, '..', 'dist', 'userScript.js'), 'utf-8');
-    console.log('userScript loaded (' + userScript.length + ' bytes)');
+    const scriptPath = require.resolve('@foxreis/tizentube/dist/userScript.js');
+    userScript = readFileSync(scriptPath, 'utf-8');
+    const pkg = JSON.parse(readFileSync(require.resolve('@foxreis/tizentube/package.json'), 'utf-8'));
+    console.log('userScript loaded from @foxreis/tizentube@' + pkg.version + ' (npm)');
 } catch {
-    console.error('dist/userScript.js not found — run build/wrap-tizen.sh first.');
-    process.exit(1);
+    try {
+        userScript = readFileSync(join(__dirname, '..', 'dist', 'userScript.js'), 'utf-8');
+        console.log('userScript loaded from local dist/');
+    } catch {
+        console.error('userScript not found. Install @foxreis/tizentube or run the build first.');
+        process.exit(1);
+    }
 }
 
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+console.log('userScript size: ' + userScript.length + ' bytes');
 
 async function attachDebugger(port, adbConn) {
     try {
-        const res = await nodeFetch(`http://${tvIp}:${port}/json`);
+        const res = await nodeFetch('http://' + tvIp + ':' + port + '/json');
         const targets = await res.json();
         if (!targets[0]?.webSocketDebuggerUrl) throw new Error('No debugger URL in /json response');
 
         const wsUrl = targets[0].webSocketDebuggerUrl;
         adbConn._stream.end();
 
-        console.log('CDP: connecting to', wsUrl);
+        console.log('CDP: connecting to ' + wsUrl);
         const ws = new WebSocket(wsUrl);
         let msgId = 12;
 
