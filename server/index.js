@@ -152,13 +152,14 @@ setInterval(function() {
     }
 }
 
-// Poll SDB until the app process appears, then relaunch in debug mode to enable injection.
-// This fires after the user explicitly opens TizenTube from the TV home screen.
+// Poll SDB every second until the app process appears, then switch to debug mode.
 function pollForApp() {
+    console.log('[poll] Checking if TizenTube is running...');
     const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
     adb._intentionalClose = false;
 
     adb._stream.on('connect', () => {
+        console.log('[poll] SDB connected, running ps...');
         const shell = adb.createStream('shell:0 ps');
         let output = '';
         shell.on('data', d => { output += d.toString(); });
@@ -166,23 +167,28 @@ function pollForApp() {
             adb._intentionalClose = true;
             adb._stream.end();
             if (output.includes('TZTubeAlne')) {
-                console.log('TizenTube detected running — switching to debug mode...');
+                console.log('[poll] TizenTube detected running — launching in debug mode...');
                 launchAndInject();
             } else {
-                setTimeout(pollForApp, 2000);
+                console.log('[poll] TizenTube not running. Retrying in 1s...');
+                setTimeout(pollForApp, 1000);
             }
         });
-        // Fallback: if shell never sends 'end', move on after 3s
+        // Fallback: if shell stream never closes, bail after 3s
         setTimeout(() => {
             if (!adb._intentionalClose) {
+                console.log('[poll] ps timed out. Retrying in 1s...');
                 adb._intentionalClose = true;
                 adb._stream.end();
-                setTimeout(pollForApp, 2000);
+                setTimeout(pollForApp, 1000);
             }
         }, 3000);
     });
 
-    adb._stream.on('error', () => setTimeout(pollForApp, 3000));
+    adb._stream.on('error', err => {
+        console.log('[poll] SDB error: ' + err.message + '. Retrying in 2s...');
+        setTimeout(pollForApp, 2000);
+    });
     adb._stream.on('close', () => {});
 }
 
@@ -204,8 +210,8 @@ function launchAndInject() {
     });
 
     adb._stream.on('error', err => {
-        console.error('SDB error: ' + err.message + '. Retrying in 5s...');
-        setTimeout(launchAndInject, 5000);
+        console.error('[launch] SDB error: ' + err.message + '. Falling back to poll in 3s...');
+        setTimeout(pollForApp, 3000);
     });
 
     adb._stream.on('close', () => {
@@ -215,4 +221,5 @@ function launchAndInject() {
     });
 }
 
-launchAndInject();
+console.log('Server started. Polling for TizenTube on ' + tvIp + '...');
+pollForApp();
