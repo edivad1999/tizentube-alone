@@ -167,6 +167,7 @@ function launchAndInject() {
         const shell = adb.createStream('shell:0 debug ' + APP_ID);
         shell.on('data', data => {
             const s = data.toString();
+            console.log('debug shell raw:', JSON.stringify(s));
             if (s.includes('debug')) {
                 const port = s.substring(s.indexOf(':') + 1, s.indexOf(':') + 7).trim();
                 console.log('Debug port: ' + port);
