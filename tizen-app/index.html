@@ -4,13 +4,38 @@
     <meta charset="utf-8">
     <title>TizenTube</title>
     <style>
-        body { background: #0f0f0f; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        p { color: #fff; font-family: sans-serif; font-size: 24px; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #0f0f0f; display: flex; justify-content: center; align-items: center; height: 100vh; font-family: sans-serif; color: #fff; }
+        #status { font-size: 24px; text-align: center; }
+        #setup { display: none; flex-direction: column; align-items: center; gap: 20px; width: 420px; }
+        #setup h2 { font-size: 28px; }
+        #setup p  { font-size: 16px; color: #aaa; text-align: center; }
+        #pcIpInput {
+            width: 100%; padding: 14px 18px; font-size: 22px; border-radius: 8px;
+            border: 2px solid #555; background: #1e1e1e; color: #fff; outline: none;
+            text-align: center;
+        }
+        #pcIpInput:focus { border-color: #f00; }
+        #connectBtn {
+            width: 100%; padding: 14px; font-size: 20px; border-radius: 8px;
+            background: #f00; color: #fff; border: none; cursor: pointer;
+        }
+        #connectBtn:focus { outline: 3px solid #fff; }
+        #errMsg { color: #f88; font-size: 14px; min-height: 20px; }
     </style>
 </head>
 <body>
-<p>YouTube should load shortly...</p>
+<p id="status">Loading...</p>
+<div id="setup">
+    <h2>TizenTube Setup</h2>
+    <p>Enter the IP address of the PC running the TizenTube server.</p>
+    <input id="pcIpInput" type="text" inputmode="numeric" placeholder="192.168.1.100" autocomplete="off" />
+    <p id="errMsg"></p>
+    <button id="connectBtn">Connect</button>
+    <p style="font-size:13px;color:#666">Press &amp; hold RED key to reset this screen.</p>
+</div>
 <script>
+(function() {
     var KEYS = [
         'MediaPlayPause', 'MediaPlay', 'MediaPause', 'MediaStop',
         'MediaFastForward', 'MediaRewind', 'MediaTrackNext', 'MediaTrackPrevious',
@@ -21,10 +46,81 @@
             try { tizen.tvinputdevice.registerKey(k); } catch (e) {}
         });
     }
-    window.location.replace(
-        'https://www.youtube.com/tv?additionalDataUrl=' +
-        encodeURIComponent('http://localhost:8085/dial/apps/YouTube')
-    );
+
+    function goYouTube() {
+        window.location.replace(
+            'https://www.youtube.com/tv?additionalDataUrl=' +
+            encodeURIComponent('http://localhost:8085/dial/apps/YouTube')
+        );
+    }
+
+    // Debug-mode instance: CDP pre-document script set this sentinel before any page code ran.
+    // Skip the trigger flow and navigate straight to YouTube.
+    if (window.__TIZENTUBE_DEBUG__) {
+        goYouTube();
+        return;
+    }
+
+    var statusEl = document.getElementById('status');
+    var setupEl  = document.getElementById('setup');
+    var input    = document.getElementById('pcIpInput');
+    var btn      = document.getElementById('connectBtn');
+    var errMsg   = document.getElementById('errMsg');
+
+    function showSetup() {
+        statusEl.style.display = 'none';
+        setupEl.style.display  = 'flex';
+        input.focus();
+    }
+
+    function triggerInject(pcHost) {
+        statusEl.style.display = 'block';
+        setupEl.style.display  = 'none';
+        statusEl.textContent   = 'Connecting to server...';
+        fetch('http://' + pcHost + ':3000/inject')
+            .then(function() {
+                statusEl.textContent = 'Launching TizenTube... please wait.';
+            })
+            .catch(function() {
+                statusEl.textContent = 'Could not reach server at ' + pcHost + ':3000. Check HOST_IP and that the server is running.';
+            });
+    }
+
+    var pcHost = localStorage.getItem('pcHost');
+    if (!pcHost) {
+        showSetup();
+    } else {
+        triggerInject(pcHost);
+    }
+
+    btn.addEventListener('click', function() {
+        var val = input.value.trim();
+        if (!val) { errMsg.textContent = 'Enter an IP address.'; return; }
+        errMsg.textContent = '';
+        localStorage.setItem('pcHost', val);
+        triggerInject(val);
+    });
+
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') btn.click();
+    });
+
+    // Long-press red key clears saved IP and shows setup screen again
+    var redTimer = null;
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ColorF0Red') {
+            redTimer = setTimeout(function() {
+                localStorage.removeItem('pcHost');
+                input.value = '';
+                errMsg.textContent = '';
+                showSetup();
+            }, 1500);
+        }
+    });
+    document.addEventListener('keyup', function(e) {
+        if (e.key === 'ColorF0Red') clearTimeout(redTimer);
+    });
+})();
 </script>
 </body>
 </html>

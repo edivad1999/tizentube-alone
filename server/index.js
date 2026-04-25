@@ -2,6 +2,7 @@
 import adbhost from 'adbhost';
 import nodeFetch from 'node-fetch';
 import WebSocket from 'ws';
+import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -12,16 +13,19 @@ const require = createRequire(import.meta.url);
 const APP_ID = 'TZTubeAlne.TizenTubeStandalone';
 const CDP_RETRIES = 15;
 const CDP_RETRY_DELAY = 750;
+const TRIGGER_PORT = 3000;
 
 // Spoof Cobalt/ATV UA so YouTube serves the same ad config as a real Cobalt device.
 // Tizen WebKit's default UA causes YouTube to serve a different (less restrictive) ad policy.
 const COBALT_UA = 'Mozilla/5.0 (Linux armeabi-v7a; Android 14) Cobalt/25.lts.30.1034958-gold (unlike Gecko) v8/8.8.278.17-jit gles Starboard/15, Google_ATV_sabrina_2020/UTTC.250917.004 (google, Chromecast) com.google.android.youtube.tv/5.30.301';
 
-const tvIp = process.argv[2] || process.env.TV_IP;
+const tvIp   = process.argv[2] || process.env.TV_IP;
+const hostIp = process.argv[3] || process.env.HOST_IP || '';
+
 if (!tvIp) {
-    console.error('Usage: node server/index.js <TV_IP>');
-    console.error('       TV_IP=192.168.1.50 node server/index.js');
-    console.error('       docker run --rm ghcr.io/edivad1999/tizentube-alone <TV_IP>');
+    console.error('Usage: node server/index.js <TV_IP> [HOST_IP]');
+    console.error('       TV_IP=192.168.1.50 HOST_IP=192.168.1.100 node server/index.js');
+    console.error('       docker run --rm -e TV_IP=... -e HOST_IP=... ghcr.io/edivad1999/tizentube-alone');
     process.exit(1);
 }
 
@@ -48,6 +52,9 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// Inflight guard — prevents duplicate launches while a debug attach is in progress
+let injecting = false;
+
 async function attachDebugger(port, adbConn, attempt = 1) {
     try {
         const res = await nodeFetch('http://' + tvIp + ':' + port + '/json');
@@ -64,8 +71,6 @@ async function attachDebugger(port, adbConn, attempt = 1) {
         let reloaded = false;
 
         // Append an interval that re-patches _yttv sandbox contexts as YouTube creates them.
-        // The pre-document injection runs before _yttv exists, so the patch loop at the end of
-        // adblock.js is a no-op on first run. The interval catches every key added later.
         const yttvPatcher = `
 setInterval(function() {
   if (typeof JSON._patched === 'undefined') return;
@@ -77,7 +82,10 @@ setInterval(function() {
   }
 }, 500);
 `;
-        const fullScript = userScript + '\nJSON._patched = true;\n' + yttvPatcher;
+        // Sentinel globals injected before userScript so index.html knows it's in debug mode
+        // and has the server address for any future calls.
+        const sentinels = 'window.__TIZENTUBE_DEBUG__=true;\nwindow.__PC_HOST__=' + JSON.stringify(hostIp) + ';\n';
+        const fullScript = sentinels + userScript + '\nJSON._patched = true;\n' + yttvPatcher;
 
         ws.on('open', () => {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
@@ -139,8 +147,8 @@ setInterval(function() {
 
         ws.on('error', err => console.error('CDP WebSocket error:', err.message));
         ws.on('close', () => {
-            console.log('CDP connection closed. Waiting for user to open TizenTube...');
-            setTimeout(pollForApp, 2000);
+            injecting = false;
+            console.log('CDP connection closed. Ready for next launch trigger.');
         });
     } catch (err) {
         if (attempt < CDP_RETRIES) {
@@ -148,57 +156,9 @@ setInterval(function() {
             await sleep(CDP_RETRY_DELAY);
             return attachDebugger(port, adbConn, attempt + 1);
         }
+        injecting = false;
         console.error('attachDebugger failed after ' + CDP_RETRIES + ' attempts:', err.message);
     }
-}
-
-// Poll via was_kill: returns "spend time" if app was running (and kills it).
-// On detection: app is already killed, so immediately relaunch in debug mode.
-// shell:0 streams never close — read data with a settle timer.
-function pollForApp() {
-    console.log('[poll] Checking if TizenTube is running...');
-    const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
-    let decided = false;
-
-    function decide(output) {
-        if (decided) return;
-        decided = true;
-        adb._stream.end();
-        console.log('[poll] was_kill response: ' + JSON.stringify(output.trim()));
-        if (output.includes('spend time')) {
-            console.log('[poll] TizenTube was running — killed. Relaunching in debug mode...');
-            setTimeout(launchAndInject, 300);
-        } else {
-            setTimeout(pollForApp, 1000);
-        }
-    }
-
-    adb._stream.on('connect', () => {
-        console.log('[poll] SDB connected, sending was_kill...');
-        const shell = adb.createStream('shell:0 was_kill ' + APP_ID);
-        let output = '';
-        let settleTimer = null;
-
-        shell.on('data', d => {
-            output += d.toString();
-            clearTimeout(settleTimer);
-            // Decide immediately on match, otherwise settle after 300ms quiet
-            if (output.includes('spend time')) {
-                decide(output);
-                return;
-            }
-            settleTimer = setTimeout(() => decide(output), 300);
-        });
-
-        // Hard timeout if no data arrives
-        setTimeout(() => decide(output), 3000);
-    });
-
-    adb._stream.on('error', err => {
-        console.log('[poll] SDB error: ' + err.message + '. Retry in 2s...');
-        setTimeout(pollForApp, 2000);
-    });
-    adb._stream.on('close', () => {});
 }
 
 function launchAndInject() {
@@ -219,16 +179,47 @@ function launchAndInject() {
     });
 
     adb._stream.on('error', err => {
-        console.error('[launch] SDB error: ' + err.message + '. Falling back to poll in 3s...');
-        setTimeout(pollForApp, 3000);
+        injecting = false;
+        console.error('[launch] SDB error: ' + err.message);
     });
 
     adb._stream.on('close', () => {
         if (adb._intentionalClose) return;
-        console.log('SDB disconnected unexpectedly. Polling for app in 3s...');
-        setTimeout(pollForApp, 3000);
+        injecting = false;
+        console.log('SDB disconnected unexpectedly.');
     });
 }
 
-console.log('Server started. Polling for TizenTube on ' + tvIp + '...');
-pollForApp();
+// HTTP trigger server — TV app calls GET /inject when it opens without debug mode
+const server = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    if (req.method === 'GET' && req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+        return;
+    }
+
+    if (req.method === 'GET' && req.url === '/inject') {
+        if (injecting) {
+            console.log('[trigger] /inject received — already in progress, ignoring.');
+            res.writeHead(202, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ status: 'in_progress' }));
+            return;
+        }
+        console.log('[trigger] /inject received — launching debug mode...');
+        injecting = true;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'launching' }));
+        launchAndInject();
+        return;
+    }
+
+    res.writeHead(404);
+    res.end();
+});
+
+server.listen(TRIGGER_PORT, '0.0.0.0', () => {
+    console.log('Server started. Listening for /inject triggers on port ' + TRIGGER_PORT + '.');
+    console.log('TV IP: ' + tvIp + (hostIp ? ' | Host IP: ' + hostIp : ' | HOST_IP not set'));
+});
