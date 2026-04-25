@@ -158,22 +158,61 @@ setInterval(function() {
     }
 }
 
+function debugLaunch(adb, attempt) {
+    attempt = attempt || 1;
+    console.log('Sending shell:0 debug (attempt ' + attempt + ')...');
+    const shell = adb.createStream('shell:0 debug ' + APP_ID);
+    let gotData = false;
+
+    const retryTimer = setTimeout(() => {
+        if (gotData) return;
+        shell.removeAllListeners('data');
+        if (attempt < 3) {
+            console.log('No debug response — retrying...');
+            debugLaunch(adb, attempt + 1);
+        } else {
+            injecting = false;
+            console.error('debug launch failed after 3 attempts');
+            adb._stream.end();
+        }
+    }, 4000);
+
+    shell.on('data', data => {
+        const s = data.toString();
+        console.log('debug shell raw:', JSON.stringify(s));
+        if (s.includes('debug')) {
+            gotData = true;
+            clearTimeout(retryTimer);
+            const port = s.substr(s.indexOf(':') + 1, 6).replace(' ', '');
+            console.log('Debug port: ' + port);
+            attachDebugger(parseInt(port), adb);
+        }
+    });
+    shell.on('error', err => console.log('debug shell error:', err.message));
+}
+
 function launchAndInject() {
     console.log('Connecting to TV SDB at ' + tvIp + ':26101...');
     const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
 
     adb._stream.on('connect', () => {
-        console.log('SDB connected. Launching ' + APP_ID + ' in debug mode...');
-        const shell = adb.createStream('shell:0 debug ' + APP_ID);
-        shell.on('data', data => {
-            const s = data.toString();
-            console.log('debug shell raw:', JSON.stringify(s));
-            if (s.includes('debug')) {
-                const port = s.substring(s.indexOf(':') + 1, s.indexOf(':') + 7).trim();
-                console.log('Debug port: ' + port);
-                attachDebugger(parseInt(port), adb);
-            }
+        console.log('SDB connected. Killing any running instance of ' + APP_ID + '...');
+        const kill = adb.createStream('shell:0 was_kill ' + APP_ID);
+        let killDone = false;
+
+        function afterKill() {
+            if (killDone) return;
+            killDone = true;
+            console.log('Launching ' + APP_ID + ' in debug mode...');
+            setTimeout(() => debugLaunch(adb), 300);
+        }
+
+        kill.on('data', d => {
+            console.log('was_kill response:', JSON.stringify(d.toString().trim()));
+            afterKill();
         });
+        // If app wasn't running, was_kill may return no data — proceed after timeout
+        setTimeout(afterKill, 2000);
     });
 
     adb._stream.on('error', err => {
