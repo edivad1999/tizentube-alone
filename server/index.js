@@ -49,20 +49,29 @@ async function attachDebugger(port, adbConn) {
 
         console.log('CDP: connecting to ' + wsUrl);
         const ws = new WebSocket(wsUrl);
-        let msgId = 12;
+        let msgId = 20;
 
         ws.on('open', () => {
             ws.send(JSON.stringify({ id: 7,  method: 'Debugger.enable' }));
             ws.send(JSON.stringify({ id: 11, method: 'Runtime.enable' }));
+            ws.send(JSON.stringify({ id: 12, method: 'Page.enable' }));
+            // Inject before any document parsing — catches JSON.parse hooks early
+            ws.send(JSON.stringify({
+                id: 13,
+                method: 'Page.addScriptToEvaluateOnNewDocument',
+                params: { source: userScript },
+            }));
+            console.log('Page.addScriptToEvaluateOnNewDocument registered.');
         });
 
         ws.on('message', (data) => {
             const msg = JSON.parse(data.toString());
+            // Fallback: also inject per-context for any YouTube origin contexts
             if (
                 msg.method === 'Runtime.executionContextCreated' &&
-                msg.params?.context?.origin === 'https://www.youtube.com'
+                msg.params?.context?.origin?.includes('youtube.com')
             ) {
-                console.log('YouTube TV context detected — injecting userScript...');
+                console.log('YouTube context detected — injecting userScript (fallback)...');
                 ws.send(JSON.stringify({
                     id: msgId++,
                     method: 'Runtime.evaluate',
@@ -76,7 +85,7 @@ async function attachDebugger(port, adbConn) {
                         generatePreview: false,
                     }
                 }));
-                console.log('userScript injected successfully.');
+                console.log('userScript injected (fallback).');
             }
         });
 
