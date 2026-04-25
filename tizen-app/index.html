@@ -29,7 +29,10 @@
 <div id="setup">
     <h2>TizenTube Setup</h2>
     <p>Enter the IP address of the PC running the TizenTube server.</p>
-    <input id="pcIpInput" type="text" inputmode="numeric" placeholder="192.168.1.100" autocomplete="off" />
+    <div style="display:flex;gap:10px;width:100%">
+        <input id="pcIpInput" type="text" inputmode="numeric" placeholder="192.168.1.100" autocomplete="off" style="flex:3" />
+        <input id="pcPortInput" type="text" inputmode="numeric" placeholder="3000" autocomplete="off" style="flex:1" />
+    </div>
     <p id="errMsg"></p>
     <button id="connectBtn">Connect</button>
     <p style="font-size:13px;color:#666">Press &amp; hold RED key to reset this screen.</p>
@@ -61,57 +64,68 @@
         return;
     }
 
-    var statusEl = document.getElementById('status');
-    var setupEl  = document.getElementById('setup');
-    var input    = document.getElementById('pcIpInput');
-    var btn      = document.getElementById('connectBtn');
-    var errMsg   = document.getElementById('errMsg');
+    var statusEl  = document.getElementById('status');
+    var setupEl   = document.getElementById('setup');
+    var ipInput   = document.getElementById('pcIpInput');
+    var portInput = document.getElementById('pcPortInput');
+    var btn       = document.getElementById('connectBtn');
+    var errMsg    = document.getElementById('errMsg');
 
     function showSetup() {
         statusEl.style.display = 'none';
         setupEl.style.display  = 'flex';
-        input.focus();
+        ipInput.focus();
     }
 
-    function triggerInject(pcHost) {
+    function triggerInject(pcHost, pcPort) {
+        var addr = pcHost + ':' + pcPort;
         statusEl.style.display = 'block';
         setupEl.style.display  = 'none';
         statusEl.textContent   = 'Connecting to server...';
-        fetch('http://' + pcHost + ':3000/inject')
+        fetch('http://' + addr + '/inject')
             .then(function() {
                 statusEl.textContent = 'Launching TizenTube... please wait.';
             })
             .catch(function() {
-                statusEl.textContent = 'Could not reach server at ' + pcHost + ':3000. Check HOST_IP and that the server is running.';
+                statusEl.textContent = 'Could not reach server at ' + addr + '. Check IP/port and that the server is running.';
             });
     }
 
     var pcHost = localStorage.getItem('pcHost');
+    var pcPort = localStorage.getItem('pcPort') || '3000';
     if (!pcHost) {
+        portInput.value = pcPort;
         showSetup();
     } else {
-        triggerInject(pcHost);
+        triggerInject(pcHost, pcPort);
     }
 
     btn.addEventListener('click', function() {
-        var val = input.value.trim();
-        if (!val) { errMsg.textContent = 'Enter an IP address.'; return; }
+        var ip   = ipInput.value.trim();
+        var port = portInput.value.trim() || '3000';
+        if (!ip) { errMsg.textContent = 'Enter an IP address.'; return; }
         errMsg.textContent = '';
-        localStorage.setItem('pcHost', val);
-        triggerInject(val);
+        localStorage.setItem('pcHost', ip);
+        localStorage.setItem('pcPort', port);
+        triggerInject(ip, port);
     });
 
-    input.addEventListener('keydown', function(e) {
+    ipInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') btn.click();
+    });
+    portInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') btn.click();
     });
 
-    // Long-press red key clears saved IP and shows setup screen again
+    // Long-press red key clears saved config and shows setup screen again
     var redTimer = null;
     document.addEventListener('keydown', function(e) {
         if (e.key === 'ColorF0Red') {
             redTimer = setTimeout(function() {
                 localStorage.removeItem('pcHost');
-                input.value = '';
+                localStorage.removeItem('pcPort');
+                ipInput.value   = '';
+                portInput.value = '3000';
                 errMsg.textContent = '';
                 showSetup();
             }, 1500);
