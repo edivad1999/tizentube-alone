@@ -152,8 +152,9 @@ setInterval(function() {
     }
 }
 
-// Poll SDB every second until the app process appears, then switch to debug mode.
-// shell:0 streams stay open — use data debounce instead of 'end' event.
+// Poll via was_kill: returns "spend time" if app was running (and kills it).
+// On detection: app is already killed, so immediately relaunch in debug mode.
+// shell:0 streams never close — read data with a settle timer.
 function pollForApp() {
     console.log('[poll] Checking if TizenTube is running...');
     const adb = adbhost.createConnection({ host: tvIp, port: 26101 });
@@ -163,43 +164,34 @@ function pollForApp() {
         if (decided) return;
         decided = true;
         adb._stream.end();
-        if (output.includes('TZTubeAlne')) {
-            console.log('[poll] TizenTube detected — switching to debug mode...');
-            launchAndInject();
+        console.log('[poll] was_kill response: ' + JSON.stringify(output.trim()));
+        if (output.includes('spend time')) {
+            console.log('[poll] TizenTube was running — killed. Relaunching in debug mode...');
+            setTimeout(launchAndInject, 300);
         } else {
-            console.log('[poll] Not running. Retry in 1s...');
             setTimeout(pollForApp, 1000);
         }
     }
 
     adb._stream.on('connect', () => {
-        console.log('[poll] SDB connected, running ps...');
-        const shell = adb.createStream('shell:0 ps');
+        console.log('[poll] SDB connected, sending was_kill...');
+        const shell = adb.createStream('shell:0 was_kill ' + APP_ID);
         let output = '';
         let settleTimer = null;
 
         shell.on('data', d => {
-            const chunk = d.toString();
-            console.log('[poll] ps chunk (' + chunk.length + ' bytes): ' + chunk.substring(0, 200));
-            output += chunk;
-            // Decide as soon as we see the package name
-            if (output.includes('TZTubeAlne')) {
-                clearTimeout(settleTimer);
+            output += d.toString();
+            clearTimeout(settleTimer);
+            // Decide immediately on match, otherwise settle after 300ms quiet
+            if (output.includes('spend time')) {
                 decide(output);
                 return;
             }
-            // Otherwise debounce: wait 400ms after last chunk (ps output is finite)
-            clearTimeout(settleTimer);
-            settleTimer = setTimeout(() => decide(output), 400);
+            settleTimer = setTimeout(() => decide(output), 300);
         });
 
-        // Hard timeout if no data at all
-        setTimeout(() => {
-            if (!decided) {
-                console.log('[poll] Hard timeout — ps output so far:\n' + output);
-                decide(output);
-            }
-        }, 4000);
+        // Hard timeout if no data arrives
+        setTimeout(() => decide(output), 3000);
     });
 
     adb._stream.on('error', err => {
