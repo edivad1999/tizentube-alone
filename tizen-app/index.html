@@ -10,12 +10,12 @@
         #setup { display: none; flex-direction: column; align-items: center; gap: 20px; width: 420px; }
         #setup h2 { font-size: 28px; }
         #setup p  { font-size: 16px; color: #aaa; text-align: center; }
-        #pcIpInput {
+        #addrInput {
             width: 100%; padding: 14px 18px; font-size: 22px; border-radius: 8px;
             border: 2px solid #555; background: #1e1e1e; color: #fff; outline: none;
             text-align: center;
         }
-        #pcIpInput:focus { border-color: #f00; }
+        #addrInput:focus { border-color: #f00; }
         #connectBtn {
             width: 100%; padding: 14px; font-size: 20px; border-radius: 8px;
             background: #f00; color: #fff; border: none; cursor: pointer;
@@ -28,11 +28,8 @@
 <p id="status">Loading...</p>
 <div id="setup">
     <h2>TizenTube Setup</h2>
-    <p>Enter the IP address of the PC running the TizenTube server.</p>
-    <div style="display:flex;gap:10px;width:100%">
-        <input id="pcIpInput" type="text" inputmode="numeric" placeholder="192.168.1.100" autocomplete="off" style="flex:3" />
-        <input id="pcPortInput" type="text" inputmode="numeric" placeholder="3000" autocomplete="off" style="flex:1" />
-    </div>
+    <p>Enter the server address (IP or IP:port).</p>
+    <input id="addrInput" type="text" inputmode="url" placeholder="192.168.1.100:3000" autocomplete="off" />
     <p id="errMsg"></p>
     <button id="connectBtn">Connect</button>
     <p style="font-size:13px;color:#666">Press &amp; hold RED key to reset this screen.</p>
@@ -64,21 +61,19 @@
         return;
     }
 
-    var statusEl  = document.getElementById('status');
-    var setupEl   = document.getElementById('setup');
-    var ipInput   = document.getElementById('pcIpInput');
-    var portInput = document.getElementById('pcPortInput');
-    var btn       = document.getElementById('connectBtn');
-    var errMsg    = document.getElementById('errMsg');
+    var statusEl = document.getElementById('status');
+    var setupEl  = document.getElementById('setup');
+    var addrInput = document.getElementById('addrInput');
+    var btn      = document.getElementById('connectBtn');
+    var errMsg   = document.getElementById('errMsg');
 
     function showSetup() {
         statusEl.style.display = 'none';
         setupEl.style.display  = 'flex';
-        ipInput.focus();
+        addrInput.focus();
     }
 
-    function triggerInject(pcHost, pcPort) {
-        var addr = pcHost + (pcPort ? ':' + pcPort : '');
+    function triggerInject(addr) {
         statusEl.style.display = 'block';
         setupEl.style.display  = 'none';
         statusEl.textContent   = 'Connecting to server...';
@@ -87,46 +82,36 @@
                 statusEl.textContent = 'Launching TizenTube... please wait.';
             })
             .catch(function() {
-                statusEl.textContent = 'Could not reach server at ' + addr + '. Check IP/port and that the server is running.';
+                statusEl.textContent = 'Could not reach server at ' + addr + '. Check address and that the server is running.';
             });
     }
 
-    var pcHost = localStorage.getItem('pcHost');
-    var pcPort = localStorage.getItem('pcPort');
-    if (pcPort === null) pcPort = '3000';
-    if (!pcHost) {
-        portInput.value = pcPort;
+    var pcAddr = localStorage.getItem('pcAddr');
+    if (!pcAddr) {
         showSetup();
     } else {
-        triggerInject(pcHost, pcPort);
+        triggerInject(pcAddr);
     }
 
     btn.addEventListener('click', function() {
-        var ip   = ipInput.value.trim();
-        var port = portInput.value.trim();
-        if (!ip) { errMsg.textContent = 'Enter an IP address.'; return; }
+        var val = addrInput.value.trim();
+        if (!val) { errMsg.textContent = 'Enter a server address.'; return; }
         errMsg.textContent = '';
-        localStorage.setItem('pcHost', ip);
-        localStorage.setItem('pcPort', port);
-        triggerInject(ip, port);
+        localStorage.setItem('pcAddr', val);
+        triggerInject(val);
     });
 
-    ipInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') btn.click();
-    });
-    portInput.addEventListener('keydown', function(e) {
+    addrInput.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') btn.click();
     });
 
-    // Long-press red key clears saved config and shows setup screen again
+    // Long-press red key clears saved address and shows setup screen again
     var redTimer = null;
     document.addEventListener('keydown', function(e) {
         if (e.key === 'ColorF0Red') {
             redTimer = setTimeout(function() {
-                localStorage.removeItem('pcHost');
-                localStorage.removeItem('pcPort');
-                ipInput.value   = '';
-                portInput.value = '3000';
+                localStorage.removeItem('pcAddr');
+                addrInput.value    = '';
                 errMsg.textContent = '';
                 showSetup();
             }, 1500);
