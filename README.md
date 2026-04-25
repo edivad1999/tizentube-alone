@@ -80,6 +80,8 @@ Run (exits when you close the terminal):
 docker run --rm -p 3000:3000 -e TV_IP=192.168.1.50 ghcr.io/edivad1999/tizentube-alone
 # pin a specific TizenTube version
 docker run --rm -p 3000:3000 -e TV_IP=192.168.1.50 -e TIZENTUBE_VERSION=1.2.3 ghcr.io/edivad1999/tizentube-alone
+# custom port
+docker run --rm -p 8080:8080 -e TV_IP=192.168.1.50 -e PORT=8080 ghcr.io/edivad1999/tizentube-alone
 ```
 
 Run as a persistent background service (auto-restarts on reboot):
@@ -102,6 +104,7 @@ services:
       - "3000:3000"
     environment:
       TV_IP: 192.168.1.50
+      # PORT: 3000             # injection trigger port (default 3000); update ports mapping above too
       # TIZENTUBE_VERSION: "1.2.3"  # pin a version; omit to always pull latest
 ```
 
@@ -117,6 +120,7 @@ Update to latest userscript:
 docker pull ghcr.io/edivad1999/tizentube-alone:latest
 docker rm -f tizentube
 docker run -d --restart unless-stopped --name tizentube \
+  -p 3000:3000 \
   -e TV_IP=192.168.1.50 \
   ghcr.io/edivad1999/tizentube-alone
 ```
